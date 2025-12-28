@@ -1,201 +1,54 @@
-sjxlsx - the efficient Java API for XLSX
+Experiment in large XLSX parsing performance
 =======================================
 
-[![Build Status](https://travis-ci.org/davidpelfree/sjxlsx.svg?branch=master)](https://travis-ci.org/davidpelfree/sjxlsx)
+> Credit: based on more than 10 years old abandoned project: https://github.com/davidpelfree/sjxlsx.
 
-> Credit: this project was first published in Google Code: https://code.google.com/p/sjxslx/ and it seems unmaintained.  I moved it to GitHub to modernize it's development process :)
+I was about to complete programming exercise assignment - read and parse XLSX (Excel) file and do something with its
+contents. As this is fairly simple task and I have already done that before and exercise is also hinting we might be 
+processing BIG files - I say lets try some optimizations.
+I have known and used the Apache POI framework for quite some time as this is de facto standard for handling MS Office
+stuff in JAVA and knew that there are multiple variants of Excel POI API https://poi.apache.org/components/spreadsheet/
 
-It is a **simple and efficient** java tool for reading, writing and modifying XLSX. The most important purpose to code it is for performance consideration -- all the popular ones like POI sucks in both memory consuming and parse/write speed.
+![POI API](doc/ss-features.png)
 
-- memory
+There are two factors we look after in Excel processing - memory consumption and processing speed.
+XLSX (OOXML) file is a variant of XML and as a choice for reading an XML we have basically DOM parser and/or SAX/STAX parser.
+DOM parser loads whole document in memory while SAX/STAX is for streaming processing.
 
-sjxlsx provides two modes (classic & stream) to read/modify sheets. In classic mode, all records of the sheet will be loaded. In stream mode (also named iterate mode), you can read record one after another which save a lot memory.
+As we want to read really large XLSX file (say 1GB file with 1 million rows - maximum for XLSX) we opt for
+SAX/streaming parser with low constant memory usage that reads/processes chunks of data (see POI API image)
 
-- speed
+POI or other API can`t read XLSX file directly in chunks, because XLSX file is in fact ZIP archive.
+So file has to unzipped first and then processed (looks like another bottleneck/slowdown factor).
+Eventually I had experimented with streaming parsing in POI previously, but did not achieve any great results.
 
-Microsoft XLSX use XML+zip (OOXML) to store the data. So, to be fast, sjxlsx use STAX for XML input and output. And I recommend the WSTX implementation of STAX (it's the fastest in my testing).
+<hr style="border:2px solid gray">
 
-Sample code
------------
-```java
-package com.incesoft.cms.util.excel;
+- Found article https://dzone.com/articles/read-large-excel-files-in-java-with-sjxlsx 
+  referencing interesting project: https://github.com/davidpelfree/sjxlsx (simple and efficient custom Excel reader/writer)
+- Also found this project on Github: https://github.com/monitorjbl/excel-streaming-reader based on POI but optimized for speed
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
-import java.util.List;
+First I was looking for some big 1GB Excel file - but eventually settled for file with 1 million rows
+https://chandoo.org/wp/more-than-million-rows-in-excel/ 
+that has 'only' 70MB in size as a CSV then converted that to 30MB XLSX file
 
-import com.incesoft.cms.util.excel.Sheet.SheetRowReader;
-import com.incesoft.cms.util.excel.SimpleXLSXWorkbook.Commiter;
+<hr style="border:2px solid gray">
 
-/**
- * @author floyd
- * 
- */
-public class TestSJXLSX {
+### Testing read speed on 1-million-row file
 
-        public static void addStyleAndRichText(SimpleXLSXWorkbook wb, Sheet sheet)
-                        throws Exception {
-                Font font2 = wb.createFont();
-                font2.setColor("FFFF0000");
-                Fill fill = wb.createFill();
-                fill.setFgColor("FF00FF00");
-                CellStyle style = wb.createStyle(font2, fill);
+- I wanted to give SJXLSX a try and will be focusing on using/optimizing that - POI based solutions are just for reference/benchmark
+- As we can see in [original Readme for SJXLSX](doc/SjxlsxREADME.md) it is optimized for memory and speed with STAX 
+  streaming parser - which is what we need
 
-                RichText richText = wb.createRichText();
-                richText.setText("test_text");
-                Font font = wb.createFont();
-                font.setColor("FFFF0000");
-                richText.applyFont(font, 1, 2);
-                sheet.modify(0, 0, (String) null, style);
-                sheet.modify(1, 0, richText, null);
-        }
+The Apache POI has half-baked example of HybridStreaming that cannot be run directly 
+https://svn.apache.org/repos/asf/poi/trunk/poi-examples/src/main/java/org/apache/poi/examples/xssf/streaming/HybridStreaming.java
+- This is working implementation: [HybridStreamingPOI](src/test/java/ReadTestHybridStreamingPOI.java)
 
-        static public void addRecordsOnTheFly(SimpleXLSXWorkbook wb, Sheet sheet,
-                        int rowOffset) {
-                int columnCount = 10;
-                int rowCount = 10;
-                int offset = rowOffset;
-                for (int r = offset; r < offset + rowCount; r++) {
-                        int modfiedRowLength = sheet.getModfiedRowLength();
-                        for (int c = 0; c < columnCount; c++) {
-                                sheet.modify(modfiedRowLength, c, r + "," + c, null);
-                        }
-                }
-        }
+Reader implementations:
 
-        private static void printRow(int rowPos, Cell[] row) {
-                int cellPos = 0;
-                for (Cell cell : row) {
-                        System.out.println(Sheet.getCellId(rowPos, cellPos) + "="
-                                        + cell.getValue());
-                        cellPos++;
-                }
-        }
+- [SJXLSX](src/test/java/ReadTest.java)
+- [excel-streaming-reader](src/test/java/ReadTestOptimizedPOI.java) 
+- [HybridStreamingPOI](src/test/java/ReadTestHybridStreamingPOI.java) 
+- [XSSF_POI](src/test/java/ReadTestXSSF_POI.java) 
 
-        public static void testLoadALL(SimpleXLSXWorkbook workbook) {
-                // medium data set,just load all at a time
-                Sheet sheetToRead = workbook.getSheet(0);
-                List<Cell[]> rows = sheetToRead.getRows();
-                int rowPos = 0;
-                for (Cell[] row : rows) {
-                        printRow(rowPos, row);
-                        rowPos++;
-                }
-        }
-
-        public static void testIterateALL(SimpleXLSXWorkbook workbook) {
-                // here we assume that the sheet contains too many rows which will leads
-                // to memory overflow;
-                // So we get sheet without loading all records
-                Sheet sheetToRead = workbook.getSheet(0, false);
-                SheetRowReader reader = sheetToRead.newReader();
-                Cell[] row;
-                int rowPos = 0;
-                while ((row = reader.readRow()) != null) {
-                        printRow(rowPos, row);
-                        rowPos++;
-                }
-        }
-
-        public static void testWrite(SimpleXLSXWorkbook workbook,
-                        OutputStream outputStream) throws Exception {
-                Sheet sheet = workbook.getSheet(0);
-                addRecordsOnTheFly(workbook, sheet, 0);
-                workbook.commit(outputStream);
-        }
-
-        /**
-         * Commit serveral times for large data set
-         * 
-         * @param workbook
-         * @param output
-         * @throws Exception
-         */
-        public static void testWriteByIncrement(SimpleXLSXWorkbook workbook,
-                        OutputStream output) throws Exception {
-                Commiter commiter = workbook.newCommiter(output);
-                commiter.beginCommit();
-
-                Sheet sheet = workbook.getSheet(0, false);
-                commiter.beginCommitSheet(sheet);
-                addRecordsOnTheFly(workbook, sheet, 0);
-                commiter.commitSheetWrites();
-                addRecordsOnTheFly(workbook, sheet, 20);
-                commiter.commitSheetWrites();
-                addRecordsOnTheFly(workbook, sheet, 40);
-                commiter.commitSheetWrites();
-                commiter.endCommitSheet();
-
-                commiter.endCommit();
-        }
-
-        /**
-         * first, modify the original sheet; and then append some data
-         * 
-         * @param workbook
-         * @param output
-         * @throws Exception
-         */
-        public static void testMergeBeforeWrite(SimpleXLSXWorkbook workbook,
-                        OutputStream output) throws Exception {
-                Sheet sheet = workbook.getSheet(0, false);// assuming original data
-                                                                                                        // set is large
-                addStyleAndRichText(workbook, sheet);
-                addRecordsOnTheFly(workbook, sheet, 5);
-
-                Commiter commiter = workbook.newCommiter(output);
-                commiter.beginCommit();
-                commiter.beginCommitSheet(sheet);
-                // merge it first,otherwise the modification will not take effect
-                commiter.commitSheetModifications();
-
-                // row = -1, for appending after the last row
-                sheet.modify(-1, 1, "append1", null);
-                sheet.modify(-1, 2, "append2", null);
-                // lets assume there are many rows here...
-                commiter.commitSheetWrites();// flush writes,save memory
-
-                sheet.modify(-1, 1, "append3", null);
-                sheet.modify(-1, 2, "append4", null);
-                // lets assume there are many rows here,too ...
-                commiter.commitSheetWrites();// flush writes,save memory
-
-                commiter.endCommitSheet();
-                commiter.endCommit();
-        }
-
-        private static SimpleXLSXWorkbook newWorkbook() {
-                return new SimpleXLSXWorkbook(new File("/sample.xlsx"));
-        }
-
-        private static OutputStream newOutput(String suffix) throws Exception {
-                return new BufferedOutputStream(new FileOutputStream("/sample_"
-                                + suffix + ".xlsx"));
-        }
-
-        public static void main(String[] args) throws Exception {
-                SimpleXLSXWorkbook workbook = newWorkbook();
-                // READ by classic mdoe - load all records
-                testLoadALL(newWorkbook());
-                // READ by stream mode - iterate records one by one
-                testIterateALL(newWorkbook());
-
-                // WRITE - we take WRITE as a special kind of MODIFY
-                OutputStream output = newOutput("write");
-                testWrite(workbook, output);
-                output.close();
-
-                // WRITE large data
-                output = newOutput("write_inc");
-                testWriteByIncrement(workbook, output);
-                output.close();
-
-                // MODIFY it and WRITE large data
-                output = newOutput("merge_write");
-                testMergeBeforeWrite(workbook, output);
-                output.close();
-        }
-}
-```
+[READER BENCHMARKS](doc/Benchmarks.md)

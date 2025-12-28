@@ -128,8 +128,8 @@ public class Sheet {
 						if ("row".equals(reader.getLocalName())) {
 							spans = reader.getAttributeValue(null, "spans");
 							if (spans == null) {
-								// empty row
-								ret = EMPTY_ROW;
+                                // CSV to XLSX conversion can mess up spans - make document readable
+								ret = new Cell[100];
 							} else {
 								lastRowIndex = Integer.valueOf(reader
 										.getAttributeValue(null, "r")) - 1;
