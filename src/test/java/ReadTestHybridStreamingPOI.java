@@ -1,4 +1,5 @@
 import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.xssf.eventusermodel.ReadOnlySharedStringsTable;
 import org.apache.poi.xssf.eventusermodel.XSSFReader;
 import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler;
@@ -28,7 +29,7 @@ public class ReadTestHybridStreamingPOI {
     public static void processLargeExcel(String filePath) throws Exception {
         long start = System.currentTimeMillis();
         // 1. Open the file in read-only mode to save memory
-        try (OPCPackage pkg = OPCPackage.open(filePath)) {
+        try (OPCPackage pkg = OPCPackage.open(filePath, PackageAccess.READ)) {
             XSSFReader reader = new XSSFReader(pkg);
             ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
             StylesTable styles = reader.getStylesTable(); // Hybrid part: access styles

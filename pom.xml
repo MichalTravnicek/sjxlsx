@@ -48,9 +48,14 @@
 			<version>1.1.1</version>
 		</dependency>
         <dependency>
-            <groupId>com.monitorjbl</groupId>
-            <artifactId>xlsx-streamer</artifactId>
-            <version>2.2.0</version>
+            <groupId>com.github.pjfanning</groupId>
+            <artifactId>excel-streaming-reader</artifactId>
+            <version>5.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.21.0</version>
         </dependency>
 		<dependency>
 			<groupId>jexcelapi</groupId>

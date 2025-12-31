@@ -1,4 +1,4 @@
-import com.monitorjbl.xlsx.StreamingReader;
+import com.github.pjfanning.xlsx.StreamingReader;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -22,6 +22,7 @@ public class ReadTestOptimizedPOI {
         long start = System.currentTimeMillis();
         File f = new File("src/main/resources/sample_file.xlsx");
         Workbook workbook = StreamingReader.builder()
+                .setReadStyles(false)
                 .rowCacheSize(100)
                 .bufferSize(4096)
                 .open(f);

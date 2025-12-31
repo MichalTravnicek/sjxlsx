@@ -2,9 +2,9 @@ File: sample_file.xlsx - 1048576 rows - 6 columns with random small numbers
 
 #### First baseline performance snapshot with JAVA8 JDK SEMERU 1.8.0_472
 
-- [SJXLSX](../src/test/java/ReadTest.java) - 5398ms to 6006ms from 3 samples
-- [excel-streaming-reader](../src/test/java/ReadTestOptimizedPOI.java) - 8198ms to 8914ms from 4 samples
-- [HybridStreamingPOI](../src/test/java/ReadTestHybridStreamingPOI.java) - 21677ms to 22016ms from 3 samples
+- [SJXLSX](../src/test/java/ReadTest.java) - 5398ms to 6006ms from 3-batch run
+- [excel-streaming-reader](../src/test/java/ReadTestOptimizedPOI.java) - 8198ms to 8914ms from 4-batch run
+- [HybridStreamingPOI](../src/test/java/ReadTestHybridStreamingPOI.java) - 21677ms to 22016ms from 3-batch run
 - [XSSF_POI](../src/test/java/ReadTestXSSF_POI.java) - 25135ms to 28922ms - about 8-10GB RAM! 
 
 Overview: Tested all available readers including XSSF_POI just to have comparison<br>
@@ -34,9 +34,9 @@ Overview: Tested all available readers including XSSF_POI just to have compariso
 
 #### Optimization 1 - for free - upgrade JAVA version to JAVA25 JDK GRAALVM 25.0.1 Bellsoft Liberica
 
-- [SJXLSX](../src/test/java/ReadTest.java) - 3259ms to 3915ms from 3 samples
-- [excel-streaming-reader](../src/test/java/ReadTestOptimizedPOI.java) - 4810ms to 6025ms from 4 samples
-- [HybridStreamingPOI](../src/test/java/ReadTestHybridStreamingPOI.java) - 15394ms to 17218ms from 3 samples
+- [SJXLSX](../src/test/java/ReadTest.java) - 3259ms to 3915ms (cold start 3514ms) from batch run
+- [excel-streaming-reader](../src/test/java/ReadTestOptimizedPOI.java) - 4810ms to 6025ms (cold start 5472ms) from batch run
+- [HybridStreamingPOI](../src/test/java/ReadTestHybridStreamingPOI.java) - 15394ms to 17218ms from batch run
 - [XSSF_POI](../src/test/java/ReadTestXSSF_POI.java) - 20263ms to 23567ms - about 10GB RAM! 
 
 #### Details:
@@ -50,3 +50,23 @@ Overview: Tested all available readers including XSSF_POI just to have compariso
 _**Update**: found out up-to-date fork of **excel-streaming-reader** https://github.com/pjfanning/excel-streaming-reader 
 that supports newest Apache POI 5.0.0+. Also rechecked that used excel-streaming-reader version 2.2.0 is having Apache POI 4.1.2 not 5.0.0.
 I will update relevant dependencies and retest all POI readers - also looks like running HybridStreamingPOI is not readonly as it modifies input file!_ 
+
+<hr style="border:2px solid gray">
+
+#### Optimization 2 - upgrade excel-streaming-reader version with latest Apache POI 5.5.1
+
+- [SJXLSX](../src/test/java/ReadTest.java) - 3259ms to 3915ms (cold start 3514ms) - no measurable change
+- [excel-streaming-reader](../src/test/java/ReadTestOptimizedPOI.java) - 4394ms to 5556ms (cold start 5141ms)
+- [HybridStreamingPOI](../src/test/java/ReadTestHybridStreamingPOI.java) - 11207ms to 12835ms - fixed READONLY mode
+- [XSSF_POI](../src/test/java/ReadTestXSSF_POI.java) - 18907ms to 23397ms - about 12GB RAM!
+
+#### Details:
+- SJXLSX: [Sample1](SJXLSX-JAVA25.png), [Sample2](SJXLSX-JAVA25_2.png) - no measurable change - POI5 should have no effect
+- excel-streaming-reader: [Sample1](OptimizedPOI-POI5-JAVA25.png), [Sample2](OptimizedPOI-POI5-JAVA25_2.png), [Sample3](OptimizedPOI-POI5-JAVA25_3.png),
+  [Sample4](OptimizedPOI-POI5-JAVA25_4.png) - disabled one flag of reader and have a slight improvement (or its upgrade to POI5?)  
+  On lucky runs as low as 5043ms measured on cold start - second or third batch can go down to 4394ms  
+- HybridStreamingPOI: [Sample1](HybridStreaming-POI5-JAVA25.png), [Sample2](HybridStreaming-POI5-JAVA25_2.png) - about 15% improvement! 
+  due to proper READONLY flag, POI version 5 has no speed benefit effect here
+- XSSF_POI: [Sample1](XSSF-POI5-JAVA25.png), [Sample2](XSSF-POI5-JAVA25_2.png), [MemoryBefore](XSSF-POI5-MemoryBefore-JAVA25.png),
+  [MemoryAllocated](XSSF-POI5-MemoryAllocated-JAVA25.png) - slight speed improvement about 5%, requires adding IOUtils library 
+  and configure setByteArrayMaxOverride, memory allocation is the same or even worse - 12GB (see images)!
